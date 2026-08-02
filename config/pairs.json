@@ -1,0 +1,22 @@
+{
+  "pairs": [
+    {
+      "symbol": "EURUSD",
+      "enabled": true,
+      "base_timeframe": "15m",
+      "description": "Euro / US Dollar"
+    },
+    {
+      "symbol": "GBPUSD",
+      "enabled": true,
+      "base_timeframe": "15m",
+      "description": "British Pound / US Dollar"
+    },
+    {
+      "symbol": "USDJPY",
+      "enabled": false,
+      "base_timeframe": "1h",
+      "description": "US Dollar / Japanese Yen"
+    }
+  ]
+}

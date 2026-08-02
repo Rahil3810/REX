@@ -1,0 +1,14 @@
+{
+  "provider": "dukascopy",
+  "symbols": ["EURUSD", "GBPUSD", "XAUUSD"],
+  "timeframe": "M1",
+  "start_date": "2020-01-01",
+  "end_date": "2025-12-31",
+  "timeout_seconds": 3600,
+  "retries": 3,
+  "retry_delay_seconds": 5,
+  "data_directory": "data/historical",
+  "overwrite_existing_files": false,
+  "duka_threads": 5,
+  "include_header": true
+}

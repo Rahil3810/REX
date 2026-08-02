@@ -1,0 +1,88 @@
+{
+  "EURUSD": {
+    "zones": [
+      {
+        "id": 1,
+        "name": "feb_resistance_1",
+        "low": 1.1860,
+        "high": 1.1874,
+        "timeframe": "H1",
+        "strength": 9
+      },
+      {
+        "id": 2,
+        "name": "feb_resistance_2",
+        "low": 1.1908,
+        "high": 1.1924,
+        "timeframe": "H1",
+        "strength": 8
+      },
+      {
+        "id": 3,
+        "name": "feb_support_1",
+        "low": 1.1778,
+        "high": 1.1787,
+        "timeframe": "H1",
+        "strength": 8
+      },
+      {
+        "id": 4,
+        "name": "feb_support_2",
+        "low": 1.1592,
+        "high": 1.1620,
+        "timeframe": "H1",
+        "strength": 9
+      },
+      {
+        "id": 5,
+        "name": "weekly_supply_example",
+        "low": 1.2000,
+        "high": 1.2050,
+        "timeframe": "weekly",
+        "strength": 9,
+        "kind": "supply"
+      },
+      {
+        "id": 6,
+        "name": "weekly_demand_example",
+        "low": 1.1400,
+        "high": 1.1450,
+        "timeframe": "weekly",
+        "strength": 8,
+        "kind": "demand"
+      },
+      {
+        "id": 7,
+        "name": "daily_supply_example",
+        "low": 1.1950,
+        "high": 1.1980,
+        "timeframe": "daily",
+        "strength": 7,
+        "kind": "supply"
+      },
+      {
+        "id": 8,
+        "name": "daily_demand_example",
+        "low": 1.1500,
+        "high": 1.1530,
+        "timeframe": "daily",
+        "strength": 7,
+        "kind": "demand"
+      }
+    ]
+  },
+
+  "GBPUSD": {
+    "zones": [
+      {
+        "id": 1,
+        "name": "weekly_support",
+        "low": 1.2600,
+        "high": 1.2625,
+        "timeframe": "weekly",
+        "strength": 8,
+        "kind": "demand"
+      }
+    ]
+  }
+}

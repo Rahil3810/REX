@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from math import isfinite
 from typing import Protocol
 
-from models.zone import ZoneBook, ZoneKind
+from models.zone import ZoneBook, ZoneKind, ZoneSource
 
 VALID_PAIR_TIMEFRAMES = frozenset(
     {
@@ -163,6 +163,25 @@ def validate_zone_entries(symbol: str, entries: object) -> None:
                     f"Zone {zone_id} for {symbol} kind must be "
                     f"'supply' or 'demand', got {kind!r}"
                 ) from exc
+
+        source = entry.get("source")
+        if source is not None:
+            if not isinstance(source, str):
+                raise InvalidZoneError(
+                    f"Zone {zone_id} for {symbol} source must be a string when provided"
+                )
+            try:
+                parsed = ZoneSource(source.strip().lower())
+            except ValueError as exc:
+                raise InvalidZoneError(
+                    f"Zone {zone_id} for {symbol} source must be "
+                    f"'manual' or 'automatic', got {source!r}"
+                ) from exc
+            if parsed is not ZoneSource.MANUAL:
+                raise InvalidZoneError(
+                    f"Zone {zone_id} for {symbol}: config/zones.json may only use "
+                    f"source='manual' (got {source!r})"
+                )
 
         normalized.append((zone_id, float(low), float(high)))
 

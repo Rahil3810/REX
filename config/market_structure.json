@@ -10,6 +10,14 @@
     "fast_period": 20,
     "slow_period": 50
   },
+  "indicators": {
+    "atr_period": 14,
+    "rsi_period": 14,
+    "macd_fast_period": 12,
+    "macd_slow_period": 26,
+    "macd_signal_period": 9,
+    "relative_volume_period": 20
+  },
   "swing_detection": {
     "left_bars": 2,
     "right_bars": 2,
@@ -42,6 +50,7 @@
     "low": 25
   },
   "multi_timeframe_mapping": {
+    "M1": ["M15", "M30", "H1", "H4"],
     "M15": ["M30", "H1", "H4"],
     "M30": ["H1", "H4"],
     "H1": ["H4"],

@@ -55,3 +55,6 @@ class IndicatorEngine:
 
     def adx(self, bars: Sequence[Bar], length: int = 14) -> ADXResult:
         return self._provider.adx(bars, length=length)
+
+    def relative_volume(self, bars: Sequence[Bar], length: int = 20) -> pd.Series:
+        return self._provider.relative_volume(bars, length=length)

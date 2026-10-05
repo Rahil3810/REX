@@ -1,16 +1,19 @@
 """Strict CSV parsing into the project's existing Bar model."""
 
 import csv
-import math
-from datetime import datetime, timezone
 from pathlib import Path
 
+from historical.bar_contract import rows_from_mapping
 from historical.exceptions import HistoricalParseError
 from models.bar import Bar
 
 
 class HistoricalDataParser:
-    """Parse and validate canonical or duka M1 CSV files."""
+    """Parse and validate canonical or duka M1 CSV files into REX ``Bar``s.
+
+    Dukascopy/duka timestamps without timezone are treated as UTC wall times
+    (see ``historical.bar_contract``). No local-machine timezone is applied.
+    """
 
     _TIMESTAMP_COLUMNS = ("timestamp", "time")
 
@@ -50,75 +53,10 @@ class HistoricalDataParser:
                         ),
                     )
                 )
-                return self._parse_rows(reader, symbol.upper())
+                return rows_from_mapping(reader, symbol.upper())
         except OSError as exc:
             raise HistoricalParseError(f"Unable to read historical file: {path}") from exc
-
-    def _parse_rows(self, rows: csv.DictReader[str], symbol: str) -> list[Bar]:
-        bars: list[Bar] = []
-        previous: datetime | None = None
-        seen: set[datetime] = set()
-        for row_number, row in enumerate(rows, start=2):
-            try:
-                timestamp_text = next(
-                    row[name]
-                    for name in self._TIMESTAMP_COLUMNS
-                    if name in row and row[name]
-                )
-                timestamp = self._timestamp(timestamp_text)
-                values = {
-                    name: self._price(row.get(name), name)
-                    for name in ("open", "high", "low", "close")
-                }
-                volume_text = row.get("volume")
-                volume = (
-                    None
-                    if volume_text is None or not volume_text.strip()
-                    else self._price(volume_text, "volume", allow_zero=True)
-                )
-            except (KeyError, StopIteration, TypeError, ValueError) as exc:
-                raise HistoricalParseError(
-                    f"Invalid historical row {row_number}: {exc}"
-                ) from exc
-
-            if values["high"] < values["low"]:
-                raise HistoricalParseError(f"Invalid row {row_number}: high below low")
-            if not values["low"] <= values["open"] <= values["high"]:
-                raise HistoricalParseError(f"Invalid row {row_number}: open outside range")
-            if not values["low"] <= values["close"] <= values["high"]:
-                raise HistoricalParseError(f"Invalid row {row_number}: close outside range")
-            if timestamp in seen:
-                raise HistoricalParseError(
-                    f"Duplicate timestamp at row {row_number}: {timestamp.isoformat()}"
-                )
-            if previous is not None and timestamp <= previous:
-                raise HistoricalParseError(
-                    f"Out-of-order timestamp at row {row_number}: {timestamp.isoformat()}"
-                )
-            seen.add(timestamp)
-            previous = timestamp
-            bars.append(Bar(symbol, timestamp, volume=volume, **values))
-        return bars
-
-    @staticmethod
-    def _timestamp(value: str) -> datetime:
-        text = value.strip()
-
-        try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            parsed = datetime.strptime(text, "%Y%m%d %H%M%S")
-
-        if parsed.tzinfo is not None:
-            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-
-        return parsed
-
-    @staticmethod
-    def _price(value: str | None, name: str, allow_zero: bool = False) -> float:
-        if value is None or not value.strip():
-            raise ValueError(f"missing {name}")
-        parsed = float(value)
-        if not math.isfinite(parsed) or parsed < 0 or (parsed == 0 and not allow_zero):
-            raise ValueError(f"invalid {name}")
-        return parsed
+        except HistoricalParseError:
+            raise
+        except Exception as exc:  # defensive: csv DictReader edge cases
+            raise HistoricalParseError(f"Unable to parse historical file: {path}: {exc}") from exc

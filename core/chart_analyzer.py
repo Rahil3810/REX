@@ -2,6 +2,7 @@
 
 from core.logger import setup_logger
 from core.market import distance_to_pips_for_symbol
+from core.zones.types import select_preferred_inside_zone
 from models.market_context import MarketContext, NearestZoneInfo
 from models.zone import Zone, ZoneBook
 
@@ -18,12 +19,15 @@ class ChartAnalyzer:
     - Distance to each in pips
     - Whether price is inside a zone and which one
     - Zone strength and timeframe for the active zone
+
+    Active-zone selection matches ``ZoneEngine`` / ``select_preferred_inside_zone``
+    (strongest manual strength, then tightest range, then highest id).
     """
 
     def analyze(self, zone_book: ZoneBook, current_price: float) -> MarketContext:
         """Build a MarketContext snapshot for the given price and zone book."""
         symbol = zone_book.symbol
-        active_zone = self._find_active_zone(zone_book.zones, current_price)
+        active_zone = select_preferred_inside_zone(zone_book.zones, current_price)
         nearest_above = self._find_nearest_zone_above(
             zone_book.zones, current_price, symbol
         )
@@ -39,19 +43,14 @@ class ChartAnalyzer:
             active_zone_name=active_zone.name if active_zone else None,
             active_zone_strength=active_zone.strength if active_zone else None,
             active_zone_timeframe=active_zone.timeframe if active_zone else None,
+            active_zone_source=(
+                active_zone.source.value if active_zone is not None else None
+            ),
             nearest_zone_above=nearest_above,
             nearest_zone_below=nearest_below,
         )
         logger.debug("Market context for %s: %s", symbol, context.to_dict())
         return context
-
-    def _find_active_zone(
-        self, zones: tuple[Zone, ...], current_price: float
-    ) -> Zone | None:
-        for zone in zones:
-            if zone.contains_price(current_price):
-                return zone
-        return None
 
     def _find_nearest_zone_above(
         self,
@@ -74,6 +73,7 @@ class ChartAnalyzer:
                         name=zone.name,
                         timeframe=zone.timeframe,
                         strength=zone.strength,
+                        source=zone.source.value,
                     )
                 )
 
@@ -102,6 +102,7 @@ class ChartAnalyzer:
                         name=zone.name,
                         timeframe=zone.timeframe,
                         strength=zone.strength,
+                        source=zone.source.value,
                     )
                 )
 

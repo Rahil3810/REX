@@ -4,7 +4,7 @@
 **Audience:** Developers and AI assistants working in this codebase.  
 **Owner:** Project Maintainer  
 **Update Frequency:** Frequently (whenever architecture, capabilities, or debt change)  
-**Last Reviewed:** 2026-08-01  
+**Last Reviewed:** 2026-08-02  
 **Related Documents:** [VISION.md](VISION.md) · [PRINCIPLES.md](PRINCIPLES.md) · [ROADMAP.md](ROADMAP.md) · [README.md](README.md) · [research/README.md](research/README.md)
 
 > Why we exist, engineering rules, and future phases are **not** redefined here. See the related documents above.
@@ -54,7 +54,7 @@ Strategies must **not** compute position size, account risk, margin, or broker d
 
 **Secondary demo path:** `SignalEngine` in `core/` — currently hardwired to `BreakoutStrategy`. Prefer `BacktestRunner` for research.
 
-**Analysis-only:** `MarketStructureAnalyzer` under `core/market_structure/`.
+**Feature spine (Phase 1 architecture):** `FeatureRepository` in `core/features/` materializes immutable `FeatureContext` packs. Views (`TrendView`, `MomentumView`, `VolatilityView`, `PhaseView`) are pure projections with required `method_id`. Strategies do **not** yet consume `FeatureContext` (Phase 2). Legacy `ChartAnalyzer` remains for demo zone enrichment only.
 
 ### Execution component responsibilities
 
@@ -85,13 +85,11 @@ Domain notes:
 | `strategies/rules/` | Reusable detection rules (no backtest imports) |
 | `backtests/` | Replay, trade simulator (executor), fills, metrics, results, comparison |
 | `historical/` | Dukascopy download, parse, storage, provider |
-| `core/` | Config/zone loaders, feeds, sessions, chart context, signal engine, modular research engines |
+| `core/` | Config/zone loaders, feeds, sessions, chart context, signal engine, feature architecture |
 | `core/zones/` | `ZoneEngine` + `ZoneProvider` (manual HTF supply/demand today) |
 | `core/indicators/` | `IndicatorEngine` + `IndicatorProvider` (pandas-ta-classic behind `PandasTAProvider`) |
 | `core/market/` | Thin `Market` + `Instrument` metadata (capabilities, calendar boundary) |
-| `core/market_structure/` | Existing analyzer **and** Strategy V1 structure contracts (placeholders) |
-| `core/liquidity/` | Liquidity engine placeholder (no logic yet) |
-| `core/momentum/` | Momentum engine placeholder (no logic yet) |
+| `core/features/` | `FeatureRepository`, `FeatureContext`, feature packs, generators, Views |
 | `config/` | JSON configuration files |
 | `data/historical/` | Generated yearly M1 CSV partitions (runtime data) |
 | `research/` | Observations, hypotheses, experiment notes |
@@ -156,12 +154,13 @@ Domain notes:
 | `PandasTAProvider` | Sole adapter to `pandas-ta-classic` (`import pandas_ta_classic as ta`) |
 | `Market` / `Instrument` (`core/market/`) | Domain vs tradeable metadata; pip/tick via Instrument; no asset-class packages |
 | `TradingCalendar` | Boundary only (`AlwaysOpenCalendar`); FX sessions still in `SessionManager` |
-| Structure contracts (`swing` / `bos` / `choch` / `trend_state`) | Strategy V1 interfaces; **not implemented** |
-| `PlaceholderLiquidityEngine` / `PlaceholderMomentumEngine` | Reserved packages; **no trading logic** |
+| `FeatureRepository` (`core/features/`) | In-memory materializer → immutable `FeatureContext` packs |
+| Feature packs / generators | Price, structure (swings), volatility (range expansion), indicators, zones, session |
+| Views (`TrendView`, `MomentumView`, `VolatilityView`, `PhaseView`, `LiquidityView`) | Pure projections; require `method_id`; no detection |
 | `SessionManager` | Fixed UTC session windows (DST not modeled) |
 | `DataFeed` / `MockDataFeed` | Feed abstraction; mock for demos/tests |
 
-**Note:** Existing `MarketStructureAnalyzer` / `TrendAnalyzer` remain the current research analysis path. Strategy V1 should compose the new contracts so detection can be swapped later without rewriting consumers.
+**Note:** Dual MSA / Strategy-V1 placeholder stacks were removed (CTX-013). Trend is a View (`market_structure_v1`); body-size classification is `RangeExpansion` on `VolatilityPack`, not momentum. Strategies still call `generate_signals(candles)` until Phase 2 wires `FeatureContext`.
 
 ---
 
@@ -177,9 +176,9 @@ Domain notes:
 - Optional trade simulation with conservative OHLC fills, ambiguity handling, R-multiple P&amp;L
 - Lifecycle reconciliation helpers on `BacktestResult`
 - Result export: JSON, CSV, Excel
-- Market structure **analysis** (not decisioning)
+- FeatureRepository materialization + versioned Views (no platform confidence integer)
 - Session labeling helpers
-- Automated test suite (~99 tests)
+- Automated test suite (`unittest`)
 
 **Research modes (explicit):**
 
@@ -443,3 +442,15 @@ Next: finish Phase 1 (Research Integrity), then Phase 2 (Research Infrastructure
 | **Reason** | Remove hardcoded pip/symbol maps without pretending multi-market support exists. |
 | **Alternatives Considered** | MarketAdapter hierarchy; per-asset-class placeholder packages; leaving pip maps in chart_analyzer. |
 | **Consequences** | Register new symbols via `Instrument` instead of editing `_PIP_SIZES`. `SessionManager` remains the FX mega-session implementation behind `SessionFamily.FOREX_MEGA`. |
+
+### CTX-013
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-08-02 |
+| **Title** | FeatureRepository spine replaces dual Trend/Momentum stacks |
+| **Status** | Accepted |
+| **Decision** | Introduce in-memory `FeatureRepository` → `FeatureContext` (typed feature packs) → pure Views with required `method_id`. Port swings and body-size logic once (range expansion). Delete `MarketStructureAnalyzer`, ConfidenceCalculator, Strategy V1 Placeholder* engines, and `core/momentum` / `core/liquidity` placeholders. No platform confidence integer. Strategies still use `generate_signals(candles)` in Phase 1. |
+| **Reason** | One canonical implementation per concept; decade-ready pack/view extensibility without engine-per-noun sprawl. |
+| **Alternatives Considered** | Keep MSA as shim; persistent feature store; silent default trend method. |
+| **Consequences** | Research structure/momentum tests target FeatureRepository/Views. SMC dialects are future optional packs, not core ontology. ChartAnalyzer demo path unchanged. |

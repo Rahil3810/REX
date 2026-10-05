@@ -12,6 +12,7 @@ class NearestZoneInfo:
     name: str
     timeframe: str
     strength: int
+    source: str = "manual"
 
     def to_dict(self) -> dict[str, str | float | int]:
         return {
@@ -20,12 +21,13 @@ class NearestZoneInfo:
             "name": self.name,
             "timeframe": self.timeframe,
             "strength": self.strength,
+            "source": self.source,
         }
 
 
 @dataclass(frozen=True)
 class MarketContext:
-    """Snapshot of price position relative to manually maintained zones."""
+    """Snapshot of price position relative to zones with preserved provenance."""
 
     symbol: str
     current_price: float
@@ -36,6 +38,7 @@ class MarketContext:
     active_zone_timeframe: str | None
     nearest_zone_above: NearestZoneInfo | None
     nearest_zone_below: NearestZoneInfo | None
+    active_zone_source: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -55,5 +58,6 @@ class MarketContext:
                 "name": self.active_zone_name,
                 "strength": self.active_zone_strength,
                 "timeframe": self.active_zone_timeframe,
+                "source": self.active_zone_source,
             }
         return payload

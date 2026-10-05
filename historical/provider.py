@@ -1,6 +1,11 @@
-"""Provider-neutral access to locally stored historical market data."""
+"""Provider-neutral access to locally stored historical market data.
+
+This class reads from ``HistoricalStorage``. Remote Dukascopy fetching is
+``DukascopyAdapter`` / ``HistoricalDownloader`` — not this type.
+"""
 
 from datetime import date, datetime, time
+
 from historical.config import HistoricalDataConfig, load_historical_config
 from historical.exceptions import UnsupportedHistoricalDataError
 from historical.parser import HistoricalDataParser
@@ -36,6 +41,9 @@ class HistoricalDataProvider:
         end_date: date,
     ) -> list[Bar]:
         """Return bars inside an inclusive date range.
+
+        Date bounds are inclusive calendar dates in UTC (naive bar timestamps
+        are compared as UTC wall times). End-of-day uses ``time.max``.
 
         Args:
             symbol: Configured market symbol.

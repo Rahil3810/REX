@@ -1,8 +1,9 @@
 """Reliable orchestration around the open-source duka downloader."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Callable, Sequence
 from datetime import date
@@ -10,9 +11,11 @@ from pathlib import Path
 from typing import Protocol
 
 from core.logger import setup_logger
+from historical.bar_contract import assess_dataset_quality
 from historical.config import HistoricalDataConfig, load_historical_config
 from historical.exceptions import HistoricalDownloadError
 from historical.parser import HistoricalDataParser
+from historical.sources import DukascopyAdapter
 from historical.storage import HistoricalStorage
 from models.bar import Bar
 
@@ -112,7 +115,11 @@ class DukaCommandRunner:
 
 
 class HistoricalDownloader:
-    """Download resumable yearly M1 partitions using duka."""
+    """Download resumable yearly M1 partitions using a Dukascopy adapter.
+
+    Flow:
+        DukascopyAdapter.fetch_bars → merge → HistoricalStorage.write_year
+    """
 
     def __init__(
         self,
@@ -121,15 +128,17 @@ class HistoricalDownloader:
         storage: HistoricalStorage | None = None,
         parser: HistoricalDataParser | None = None,
         sleeper: Callable[[float], None] = time.sleep,
+        adapter: DukascopyAdapter | None = None,
     ) -> None:
         """Initialize the downloader.
 
         Args:
             config: Settings, or ``None`` to load the default JSON file.
-            runner: Injectable duka adapter.
+            runner: Injectable duka process adapter (used when ``adapter`` is None).
             storage: Injectable yearly storage.
-            parser: Injectable strict CSV parser.
+            parser: Injectable strict CSV parser (used when ``adapter`` is None).
             sleeper: Retry-delay function, injectable for tests.
+            adapter: Optional pre-built DukascopyAdapter.
         """
         self.config = config or load_historical_config()
         self.runner = runner or DukaCommandRunner()
@@ -137,6 +146,14 @@ class HistoricalDownloader:
         self.parser = parser or HistoricalDataParser()
         self._sleep = sleeper
         self._logger = setup_logger("historical_downloader")
+        self.adapter = adapter or DukascopyAdapter(
+            runner=self.runner,
+            parser=self.parser,
+            timeout_seconds=self.config.timeout_seconds,
+            threads=self.config.duka_threads,
+            include_header=self.config.include_header,
+            supported_timeframe=self.config.timeframe,
+        )
 
     def download(
         self,
@@ -210,25 +227,33 @@ class HistoricalDownloader:
                     attempt,
                     attempts,
                 )
-                with tempfile.TemporaryDirectory(prefix="rex-duka-") as directory:
-                    source = self.runner.download(
-                        symbol=symbol,
-                        start_date=start_date,
-                        end_date=end_date,
-                        timeframe=self.config.timeframe,
-                        destination=Path(directory),
-                        timeout_seconds=self.config.timeout_seconds,
-                        threads=self.config.duka_threads,
-                        include_header=self.config.include_header,
-                    )
-                    downloaded = self.parser.parse_file(source, symbol)
-                if not downloaded:
-                    raise HistoricalDownloadError(
-                        f"duka returned no {self.config.timeframe} bars for "
-                        f"{symbol} {year}"
-                    )
+                downloaded = self.adapter.fetch_bars(
+                    symbol,
+                    self.config.timeframe,
+                    start_date,
+                    end_date,
+                )
                 bars, coverage_start, coverage_end = self._merge_existing(
                     symbol, year, downloaded, start_date, end_date
+                )
+                report = assess_dataset_quality(
+                    bars,
+                    instrument=symbol,
+                    timeframe=self.config.timeframe,
+                    provider=self.adapter.provider_id,
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                    expected_step_minutes=1,
+                )
+                self._logger.info(
+                    "Ingest quality %s %s %s: bars=%s duplicates=%s invalid=%s gaps=%s",
+                    symbol,
+                    self.config.timeframe,
+                    year,
+                    report.bar_count,
+                    report.duplicate_count,
+                    report.invalid_bar_count,
+                    report.timestamp_gap_count,
                 )
                 return self.storage.write_year(
                     symbol,
@@ -237,6 +262,8 @@ class HistoricalDownloader:
                     bars,
                     coverage_start,
                     coverage_end,
+                    provider=self.adapter.provider_id,
+                    bar_count=len(bars),
                 )
             except Exception as exc:
                 if attempt == attempts:

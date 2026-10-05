@@ -1,5 +1,6 @@
 """Zone-engine types and Strategy V1 HTF filters."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from models.zone import Zone, ZoneKind
@@ -32,6 +33,24 @@ def is_supported_htf_zone(zone: Zone) -> bool:
     if zone.kind not in SUPPORTED_HTF_KINDS:
         return False
     return normalize_zone_timeframe(zone.timeframe) in SUPPORTED_HTF_TIMEFRAMES
+
+
+def select_preferred_inside_zone(
+    zones: Sequence[Zone],
+    price: float,
+) -> Zone | None:
+    """
+    Canonical single-zone selection when price is inside one or more zones.
+
+    Preference (stable, deterministic):
+    1. highest ``strength`` (manual 0–10 rating — not confidence)
+    2. tightest range ``-(high - low)``
+    3. highest ``id`` as final tie-break
+    """
+    inside = [zone for zone in zones if zone.contains_price(price)]
+    if not inside:
+        return None
+    return max(inside, key=lambda z: (z.strength, -(z.high - z.low), -z.id))
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Strongly typed market-structure analysis models."""
+"""Strongly typed market-structure and feature-related enums/models."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -23,12 +23,21 @@ class MarketPhase(StrEnum):
     REVERSAL = "reversal"
 
 
-class MomentumState(StrEnum):
-    """Momentum labels based on recent candle bodies versus historical bodies."""
+class RangeExpansionState(StrEnum):
+    """Recent candle-body size versus historical body size.
+
+    ``UNAVAILABLE`` means the ratio could not be computed (insufficient
+    history or undefined baseline). It is not a market regime.
+    """
 
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
+    UNAVAILABLE = "unavailable"
+
+
+# Backward-compatible alias — prefer RangeExpansionState in new code.
+MomentumState = RangeExpansionState
 
 
 @dataclass(frozen=True)
@@ -60,55 +69,4 @@ class TimeframeStructure:
             "timeframe": self.timeframe,
             "trend": self.trend.value,
             "reason": self.reason,
-        }
-
-
-@dataclass(frozen=True)
-class MarketStructure:
-    """
-    Deterministic market-structure snapshot.
-
-    This model describes observed market structure only. It contains no trade
-    direction, order instruction, position sizing, or risk-management decision.
-    """
-
-    symbol: str
-    entry_timeframe: str
-    trend: MarketTrend
-    market_phase: MarketPhase
-    momentum: MomentumState
-    trend_strength: int
-    confidence: int
-    price_action_score: ComponentScore
-    multi_timeframe_score: ComponentScore
-    trend_structure_score: ComponentScore
-    momentum_score: ComponentScore
-    ema_alignment_score: ComponentScore
-    component_scores: dict[str, ComponentScore]
-    timeframe_structures: dict[str, TimeframeStructure]
-    explanations: tuple[str, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "symbol": self.symbol,
-            "entry_timeframe": self.entry_timeframe,
-            "trend": self.trend.value,
-            "market_phase": self.market_phase.value,
-            "momentum": self.momentum.value,
-            "trend_strength": self.trend_strength,
-            "confidence": self.confidence,
-            "price_action_score": self.price_action_score.to_dict(),
-            "multi_timeframe_score": self.multi_timeframe_score.to_dict(),
-            "trend_structure_score": self.trend_structure_score.to_dict(),
-            "momentum_score": self.momentum_score.to_dict(),
-            "ema_alignment_score": self.ema_alignment_score.to_dict(),
-            "component_scores": {
-                name: score.to_dict()
-                for name, score in self.component_scores.items()
-            },
-            "timeframe_structures": {
-                timeframe: structure.to_dict()
-                for timeframe, structure in self.timeframe_structures.items()
-            },
-            "explanations": list(self.explanations),
         }

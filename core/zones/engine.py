@@ -2,7 +2,11 @@
 
 from core.market import distance_to_pips_for_symbol
 from core.zones.providers import ZoneProvider
-from core.zones.types import ZoneDistance, is_supported_htf_zone
+from core.zones.types import (
+    ZoneDistance,
+    is_supported_htf_zone,
+    select_preferred_inside_zone,
+)
 from models.zone import Zone, ZoneKind
 
 
@@ -77,12 +81,10 @@ class ZoneEngine:
         if not zones:
             return None
 
-        inside = [zone for zone in zones if zone.contains_price(price)]
-        if inside:
-            # Prefer strongest, then tightest range for a stable pick.
-            zone = max(inside, key=lambda z: (z.strength, -(z.high - z.low), -z.id))
+        preferred = select_preferred_inside_zone(zones, price)
+        if preferred is not None:
             return ZoneDistance(
-                zone=zone,
+                zone=preferred,
                 distance_price=0.0,
                 distance_pips=0.0,
                 side="inside",

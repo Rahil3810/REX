@@ -102,6 +102,38 @@ class PandasTAProvider:
             minus_di=self._column_starting_with(raw, "DMN_").rename("DMN"),
         )
 
+    def relative_volume(self, bars: Sequence[Bar], length: int = 20) -> pd.Series:
+        """Current / mean(previous ``length`` completed bars). No TA library."""
+        self._validate_length(length)
+        if not bars:
+            raise ValueError("bars must be a non-empty sequence")
+
+        values: list[float] = []
+        for index in range(len(bars)):
+            if index < length:
+                values.append(float("nan"))
+                continue
+
+            current_volume = bars[index].volume
+            if current_volume is None:
+                values.append(float("nan"))
+                continue
+
+            previous = bars[index - length : index]
+            previous_volumes = [bar.volume for bar in previous]
+            if any(volume is None for volume in previous_volumes):
+                values.append(float("nan"))
+                continue
+
+            baseline = sum(float(volume) for volume in previous_volumes) / float(length)
+            if baseline == 0.0:
+                values.append(float("nan"))
+                continue
+
+            values.append(float(current_volume) / baseline)
+
+        return pd.Series(values, dtype="float64", name="RVOL")
+
     def _close(self, bars: Sequence[Bar], length: int) -> pd.Series:
         self._validate_length(length)
         frame = self._ohlc(bars, min_length=1)

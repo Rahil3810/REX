@@ -10,6 +10,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
+from core.features.config import default_feature_config
+from core.features.packs import build_indicator_pack
 from core.indicators import (
     ADXResult,
     BollingerBands,
@@ -34,6 +36,29 @@ def _bars_from_closes(closes: Sequence[float], *, symbol: str = "EURUSD") -> tup
                 low=price - 0.0005,
                 close=price,
                 volume=100.0,
+            )
+        )
+    return tuple(bars)
+
+
+def _bars_from_volumes(
+    volumes: Sequence[float | None],
+    *,
+    symbol: str = "EURUSD",
+) -> tuple[Bar, ...]:
+    start = datetime(2024, 1, 1, 12, 0, 0)
+    bars: list[Bar] = []
+    for index, volume in enumerate(volumes):
+        price = 1.0 + 0.0001 * index
+        bars.append(
+            Bar(
+                symbol=symbol,
+                timestamp=start + timedelta(minutes=index),
+                open=price,
+                high=price + 0.0005,
+                low=price - 0.0005,
+                close=price,
+                volume=volume,
             )
         )
     return tuple(bars)
@@ -70,6 +95,12 @@ class PandasTAProviderTests(unittest.TestCase):
         self.assertFalse(finite.empty)
         self.assertTrue(((finite >= 0.0) & (finite <= 100.0)).all())
 
+    def test_rsi_latest_is_deterministic(self) -> None:
+        series_a = self.provider.rsi(self.bars, length=14)
+        series_b = self.provider.rsi(self.bars, length=14)
+        self.assertAlmostEqual(float(series_a.iloc[-1]), float(series_b.iloc[-1]))
+        self.assertTrue(math.isfinite(float(series_a.iloc[-1])))
+
     def test_atr_positive(self) -> None:
         series = self.provider.atr(self.bars, length=14)
         self.assertEqual(len(series), len(self.bars))
@@ -82,6 +113,20 @@ class PandasTAProviderTests(unittest.TestCase):
         self.assertEqual(len(result.signal), len(self.bars))
         self.assertEqual(len(result.histogram), len(self.bars))
         self.assertTrue(math.isfinite(float(result.macd.iloc[-1])))
+
+    def test_macd_latest_components_are_deterministic(self) -> None:
+        first = self.provider.macd(self.bars, fast=12, slow=26, signal=9)
+        second = self.provider.macd(self.bars, fast=12, slow=26, signal=9)
+        self.assertAlmostEqual(float(first.macd.iloc[-1]), float(second.macd.iloc[-1]))
+        self.assertAlmostEqual(float(first.signal.iloc[-1]), float(second.signal.iloc[-1]))
+        self.assertAlmostEqual(
+            float(first.histogram.iloc[-1]), float(second.histogram.iloc[-1])
+        )
+        self.assertAlmostEqual(
+            float(first.histogram.iloc[-1]),
+            float(first.macd.iloc[-1]) - float(first.signal.iloc[-1]),
+            places=10,
+        )
 
     def test_bollinger_band_ordering(self) -> None:
         bands = self.provider.bollinger_bands(self.bars, length=20, std=2.0)
@@ -97,6 +142,46 @@ class PandasTAProviderTests(unittest.TestCase):
         self.assertEqual(len(result.plus_di), len(self.bars))
         self.assertEqual(len(result.minus_di), len(self.bars))
         self.assertGreaterEqual(float(result.adx.dropna().iloc[-1]), 0.0)
+
+    def test_relative_volume_expected_ratio(self) -> None:
+        # 20 bars of volume 10, then current bar volume 20 → 20 / 10 = 2.0
+        volumes: list[float | None] = [10.0] * 20 + [20.0]
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertAlmostEqual(float(series.iloc[-1]), 2.0)
+
+    def test_relative_volume_excludes_current_bar_from_baseline(self) -> None:
+        # If current were included, mean would be (10*19 + 100)/20 = 14.5 → ~6.9
+        # Correct baseline excludes current: mean(10*20)=10 → 100/10 = 10.0
+        volumes: list[float | None] = [10.0] * 20 + [100.0]
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertAlmostEqual(float(series.iloc[-1]), 10.0)
+
+    def test_relative_volume_none_when_insufficient_history(self) -> None:
+        volumes: list[float | None] = [10.0] * 20  # only 19 previous for last bar
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertTrue(math.isnan(float(series.iloc[-1])))
+        self.assertTrue(series.isna().all())
+
+    def test_relative_volume_none_when_volume_missing(self) -> None:
+        volumes: list[float | None] = [10.0] * 20 + [None]
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertTrue(math.isnan(float(series.iloc[-1])))
+
+    def test_relative_volume_none_when_baseline_zero(self) -> None:
+        volumes: list[float | None] = [0.0] * 20 + [5.0]
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertTrue(math.isnan(float(series.iloc[-1])))
+
+    def test_relative_volume_half_average(self) -> None:
+        volumes: list[float | None] = [20.0] * 20 + [10.0]
+        bars = _bars_from_volumes(volumes)
+        series = self.provider.relative_volume(bars, length=20)
+        self.assertAlmostEqual(float(series.iloc[-1]), 0.5)
 
     def test_insufficient_history_returns_nan_series(self) -> None:
         short = _bars_from_closes([1.0, 2.0, 3.0])
@@ -117,6 +202,8 @@ class PandasTAProviderTests(unittest.TestCase):
             self.provider.bollinger_bands(self.bars, length=20, std=0)
         with self.assertRaises(ValueError):
             self.provider.macd(self.bars, fast=26, slow=12)
+        with self.assertRaises(ValueError):
+            self.provider.relative_volume(self.bars, length=0)
 
 
 class IndicatorEngineTests(unittest.TestCase):
@@ -143,6 +230,7 @@ class IndicatorEngineTests(unittest.TestCase):
         engine.macd(bars, fast=5, slow=10, signal=3)
         engine.bollinger_bands(bars, length=5, std=1.5)
         engine.adx(bars, length=7)
+        engine.relative_volume(bars, length=20)
 
         provider.ema.assert_called_once()
         provider.rsi.assert_called_once()
@@ -150,6 +238,7 @@ class IndicatorEngineTests(unittest.TestCase):
         provider.macd.assert_called_once()
         provider.bollinger_bands.assert_called_once()
         provider.adx.assert_called_once()
+        provider.relative_volume.assert_called_once_with(bars, length=20)
 
     def test_engine_with_real_provider_matches_provider(self) -> None:
         provider = PandasTAProvider()
@@ -157,6 +246,49 @@ class IndicatorEngineTests(unittest.TestCase):
         bars = _bars_from_closes([float(i) for i in range(1, 40)])
         pd.testing.assert_series_equal(engine.sma(bars, length=5), provider.sma(bars, length=5))
         pd.testing.assert_series_equal(engine.rsi(bars, length=14), provider.rsi(bars, length=14))
+        pd.testing.assert_series_equal(
+            engine.relative_volume(bars, length=20),
+            provider.relative_volume(bars, length=20),
+        )
+
+
+class IndicatorPackBuilderTests(unittest.TestCase):
+    def test_pack_exposes_rsi_macd_and_relative_volume(self) -> None:
+        volumes: list[float | None] = [10.0] * 40 + [20.0]
+        closes = [float(i) for i in range(1, 42)]
+        start = datetime(2024, 1, 1, 12, 0, 0)
+        bars = tuple(
+            Bar(
+                symbol="EURUSD",
+                timestamp=start + timedelta(minutes=index),
+                open=close,
+                high=close + 0.0005,
+                low=close - 0.0005,
+                close=close,
+                volume=volume,
+            )
+            for index, (close, volume) in enumerate(zip(closes, volumes, strict=True))
+        )
+        config = default_feature_config()
+        engine = IndicatorEngine(PandasTAProvider())
+        pack = build_indicator_pack(
+            {"M15": bars},
+            entry_timeframe="M15",
+            config=config,
+            indicator_engine=engine,
+        )
+
+        expected_rsi = float(engine.rsi(list(bars), length=14).iloc[-1])
+        expected_macd = engine.macd(list(bars), fast=12, slow=26, signal=9)
+        self.assertAlmostEqual(pack.rsi_last or 0.0, expected_rsi)
+        self.assertAlmostEqual(pack.macd_last or 0.0, float(expected_macd.macd.iloc[-1]))
+        self.assertAlmostEqual(
+            pack.macd_signal_last or 0.0, float(expected_macd.signal.iloc[-1])
+        )
+        self.assertAlmostEqual(
+            pack.macd_histogram_last or 0.0, float(expected_macd.histogram.iloc[-1])
+        )
+        self.assertAlmostEqual(pack.relative_volume_last or 0.0, 2.0)
 
 
 class LibraryIsolationTests(unittest.TestCase):

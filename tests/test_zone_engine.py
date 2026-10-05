@@ -146,38 +146,35 @@ class ZoneEngineTests(unittest.TestCase):
             self.assertEqual(zones[0].kind, ZoneKind.SUPPLY)
 
 
-class StrategyV1PlaceholderTests(unittest.TestCase):
-    def test_structure_placeholders_are_inert(self) -> None:
-        from core.market import require_instrument
-        from core.market_structure import (
-            PlaceholderBOSDetector,
-            PlaceholderCHoCHDetector,
-            PlaceholderSwingDetector,
-            PlaceholderTrendStateAnalyzer,
-            TrendState,
-        )
+class FeatureStructurePackSmokeTests(unittest.TestCase):
+    def test_structure_pack_materializes_swings(self) -> None:
+        from datetime import datetime, timedelta
 
-        bars: tuple = ()
-        instrument = require_instrument("EURUSD")
-        self.assertEqual(PlaceholderSwingDetector().detect(bars), ())
-        self.assertEqual(PlaceholderBOSDetector().detect(bars), ())
-        self.assertEqual(PlaceholderCHoCHDetector().detect(bars), ())
-        snapshot = PlaceholderTrendStateAnalyzer().analyze(bars, instrument)
-        self.assertEqual(snapshot.state, TrendState.UNKNOWN)
+        from core.features import FeatureRepository, PACK_STRUCTURE
+        from core.features.packs.base import StructurePack
+        from models.bar import Bar
 
-    def test_liquidity_and_momentum_placeholders(self) -> None:
-        from core.liquidity import PlaceholderLiquidityEngine
-        from core.market import require_instrument
-        from core.momentum import MomentumBias, PlaceholderMomentumEngine
-
-        instrument = require_instrument("EURUSD")
-        self.assertEqual(
-            PlaceholderLiquidityEngine().analyze((), instrument).symbol, "EURUSD"
+        timestamp = datetime(2026, 6, 20, 0, 0, 0)
+        bars = [
+            Bar(
+                symbol="EURUSD",
+                timestamp=timestamp + timedelta(minutes=15 * index),
+                open=1.1 + 0.0001 * index,
+                high=1.1005 + 0.0001 * index,
+                low=1.0995 + 0.0001 * index,
+                close=1.1002 + 0.0001 * index,
+            )
+            for index in range(30)
+        ]
+        context = FeatureRepository().materialize(
+            "EURUSD",
+            {"M15": bars},
+            entry_timeframe="M15",
+            pack_ids=(PACK_STRUCTURE,),
         )
-        self.assertEqual(
-            PlaceholderMomentumEngine().analyze((), instrument).bias,
-            MomentumBias.UNKNOWN,
-        )
+        structure = context.require_pack(PACK_STRUCTURE, StructurePack)
+        self.assertIsInstance(structure, StructurePack)
+        self.assertIn("M15", structure.swings.by_timeframe)
 
 
 if __name__ == "__main__":

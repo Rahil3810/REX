@@ -48,3 +48,10 @@ class IndicatorProvider(Protocol):
 
     def adx(self, bars: Sequence[Bar], length: int = 14) -> ADXResult:
         """ADX with +DI and -DI."""
+
+    def relative_volume(self, bars: Sequence[Bar], length: int = 20) -> pd.Series:
+        """Current bar volume / mean volume of the previous ``length`` bars.
+
+        The current bar is excluded from the baseline. Returns NaN when history
+        is insufficient, volume is missing, or the baseline mean is zero.
+        """

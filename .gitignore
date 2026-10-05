@@ -50,3 +50,6 @@ coverage.xml
 
 # OS
 Thumbs.db
+# Research datasets
+research/data/**/*.csv
+download/*.csv

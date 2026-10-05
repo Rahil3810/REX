@@ -45,7 +45,7 @@ class HistoricalStorage:
         start_date: date,
         end_date: date,
     ) -> bool:
-        """Check whether a partition covers a requested date range.
+        """Check whether stored partitions cover a requested date range.
 
         Args:
             symbol: Market symbol.
@@ -54,15 +54,29 @@ class HistoricalStorage:
             end_date: Inclusive requested end date.
 
         Returns:
-            ``True`` when stored coverage includes the complete range.
+            ``True`` only when every calendar-year segment of the requested
+            range has a non-empty CSV partition **and** valid ``.meta.json``
+            coverage that includes that segment. Missing, unreadable, or
+            incomplete metadata yields ``False`` (fail closed).
         """
-        path = self.year_path(symbol, timeframe, start_date.year)
-        if not path.is_file() or path.stat().st_size == 0:
+        if start_date > end_date:
             return False
-        coverage = self.coverage(symbol, timeframe, start_date.year)
-        if coverage is None:
-            return True
-        return coverage[0] <= start_date and coverage[1] >= end_date
+
+        for year in range(start_date.year, end_date.year + 1):
+            segment_start = max(start_date, date(year, 1, 1))
+            segment_end = min(end_date, date(year, 12, 31))
+            path = self.year_path(symbol, timeframe, year)
+            if not path.is_file() or path.stat().st_size == 0:
+                return False
+            coverage = self.coverage(symbol, timeframe, year)
+            if coverage is None:
+                return False
+            coverage_start, coverage_end = coverage
+            if coverage_start > coverage_end:
+                return False
+            if coverage_start > segment_start or coverage_end < segment_end:
+                return False
+        return True
 
     def coverage(
         self, symbol: str, timeframe: str, year: int
@@ -75,7 +89,8 @@ class HistoricalStorage:
             year: Calendar partition year.
 
         Returns:
-            Inclusive coverage dates, or ``None`` when metadata is unavailable.
+            Inclusive coverage dates from ``.meta.json``, or ``None`` when
+            metadata is missing, unreadable, or malformed.
         """
         metadata = self._metadata_path(self.year_path(symbol, timeframe, year))
         try:
@@ -95,6 +110,9 @@ class HistoricalStorage:
         bars: Iterable[Bar],
         coverage_start: date,
         coverage_end: date,
+        *,
+        provider: str | None = None,
+        bar_count: int | None = None,
     ) -> Path:
         """Atomically write a yearly candle partition and coverage metadata.
 
@@ -105,6 +123,8 @@ class HistoricalStorage:
             bars: Validated bars to persist.
             coverage_start: Inclusive downloaded coverage start.
             coverage_end: Inclusive downloaded coverage end.
+            provider: Optional remote provider id recorded in metadata.
+            bar_count: Optional bar count recorded in metadata.
 
         Returns:
             Final CSV path.
@@ -137,17 +157,20 @@ class HistoricalStorage:
                 temporary.flush()
                 os.fsync(temporary.fileno())
             Path(temporary_name).replace(path)
+            metadata: dict[str, object] = {
+                "symbol": symbol.upper(),
+                "timeframe": timeframe.upper(),
+                "year": year,
+                "start_date": coverage_start.isoformat(),
+                "end_date": coverage_end.isoformat(),
+            }
+            if provider is not None:
+                metadata["provider"] = provider
+            metadata["bar_count"] = (
+                len(ordered) if bar_count is None else int(bar_count)
+            )
             self._metadata_path(path).write_text(
-                json.dumps(
-                    {
-                        "symbol": symbol.upper(),
-                        "timeframe": timeframe.upper(),
-                        "year": year,
-                        "start_date": coverage_start.isoformat(),
-                        "end_date": coverage_end.isoformat(),
-                    },
-                    indent=2,
-                ),
+                json.dumps(metadata, indent=2),
                 encoding="utf-8",
             )
             return path

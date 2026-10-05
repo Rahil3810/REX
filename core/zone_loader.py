@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from core.validation import ConfigurationError, validate_zone_entries
-from models.zone import Zone, ZoneBook, ZoneKind
+from models.zone import Zone, ZoneBook, ZoneKind, ZoneSource
 
 
 def load_zones(config_path: Path) -> dict[str, ZoneBook]:
@@ -12,7 +12,8 @@ def load_zones(config_path: Path) -> dict[str, ZoneBook]:
     Load zone definitions from a JSON file.
 
     Zones are never calculated automatically — they must be defined by the trader
-    in config/zones.json. Optional ``kind`` is ``supply`` or ``demand`` (Strategy V1 HTF).
+    in config/zones.json. Every loaded zone is tagged ``source=manual``.
+    Optional ``kind`` is ``supply`` or ``demand`` (Strategy V1 HTF).
 
     Expected format:
         {
@@ -55,6 +56,7 @@ def load_zones(config_path: Path) -> dict[str, ZoneBook]:
                 timeframe=entry.get("timeframe", ""),
                 strength=entry.get("strength", 0),
                 kind=_parse_zone_kind(entry.get("kind")),
+                source=_parse_zone_source(entry.get("source")),
             )
             for entry in entries
         )
@@ -69,3 +71,22 @@ def _parse_zone_kind(raw: object) -> ZoneKind | None:
     if not isinstance(raw, str):
         return None
     return ZoneKind(raw.strip().lower())
+
+
+def _parse_zone_source(raw: object) -> ZoneSource:
+    """Config zones are manual; optional explicit ``source`` must be manual."""
+    if raw is None:
+        return ZoneSource.MANUAL
+    if not isinstance(raw, str):
+        raise ConfigurationError("Zone source must be a string when provided")
+    try:
+        source = ZoneSource(raw.strip().lower())
+    except ValueError as exc:
+        raise ConfigurationError(
+            f"Unsupported zone source {raw!r}; config zones must be 'manual'"
+        ) from exc
+    if source is not ZoneSource.MANUAL:
+        raise ConfigurationError(
+            f"Config zones cannot use source={raw!r}; only 'manual' is allowed"
+        )
+    return source

@@ -8,9 +8,9 @@ from models.market_context import MarketContext, NearestZoneInfo
 from models.market_structure import (
     ComponentScore,
     MarketPhase,
-    MarketStructure,
     MarketTrend,
     MomentumState,
+    RangeExpansionState,
     TimeframeStructure,
 )
 from models.position import Position
@@ -19,7 +19,7 @@ from models.terminated_setup import TerminatedSetup
 from models.trade_direction import TradeDirection
 from models.trade_plan import TradePlan, TradePlanStatus
 from models.trade_setup import TradeSetup
-from models.zone import Zone, ZoneBook, ZoneKind
+from models.zone import Zone, ZoneBook, ZoneKind, ZoneSource
 
 __all__ = [
     "AccountContext",
@@ -29,11 +29,11 @@ __all__ = [
     "EntryModel",
     "MarketContext",
     "MarketPhase",
-    "MarketStructure",
     "MarketTrend",
     "MomentumState",
     "NearestZoneInfo",
     "Position",
+    "RangeExpansionState",
     "Signal",
     "SignalType",
     "TerminatedSetup",
@@ -45,4 +45,5 @@ __all__ = [
     "Zone",
     "ZoneBook",
     "ZoneKind",
+    "ZoneSource",
 ]

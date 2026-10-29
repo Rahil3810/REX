@@ -14,6 +14,8 @@ class SignalType(StrEnum):
     CLOSE_OUTSIDE = "close_outside"
     BULLISH_SWEEP = "bullish_sweep"
     BEARISH_SWEEP = "bearish_sweep"
+    RETEST_ABOVE = "retest_above"
+    RETEST_BELOW = "retest_below"
 
 
 @dataclass(frozen=True)

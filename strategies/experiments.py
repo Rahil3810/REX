@@ -22,13 +22,6 @@ class S001_ZoneBreakout(_PlaceholderStrategy):
     description = "Placeholder for the zone-breakout research hypothesis."
 
 
-class S002_BreakoutRetest(_PlaceholderStrategy):
-    # TODO(S002): Define and validate the BreakoutRetest hypothesis.
-    strategy_id = "S002"
-    strategy_name = "BreakoutRetest"
-    description = "Placeholder for the breakout-retest research hypothesis."
-
-
 class S003_MomentumPullback(_PlaceholderStrategy):
     # TODO(S003): Define and validate the MomentumPullback hypothesis.
     strategy_id = "S003"

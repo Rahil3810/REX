@@ -61,3 +61,46 @@ class SweepTradeSetupFactory:
             entry_model_hint=EntryModel.NEXT_CANDLE_OPEN,
             metadata={"signal_type": signal.signal.value},
         )
+
+
+class ZoneBreakoutRetestTradeSetupFactory:
+    """Build TradeSetup opportunities from S002 breakout-retest signals."""
+
+    def create(
+        self,
+        signal: Signal,
+        candles: Sequence[Bar],
+        strategy_id: str,
+    ) -> TradeSetup | None:
+        if signal.signal not in (SignalType.RETEST_ABOVE, SignalType.RETEST_BELOW):
+            return None
+        if not candles:
+            return None
+
+        current_bar = candles[-1]
+        if signal.signal == SignalType.RETEST_ABOVE:
+            direction = TradeDirection.LONG
+            stop_hint = current_bar.low
+        else:
+            direction = TradeDirection.SHORT
+            stop_hint = current_bar.high
+
+        setup_id = (
+            f"{signal.symbol}_{signal.timestamp.isoformat()}_{signal.signal.value}"
+        )
+        return TradeSetup(
+            setup_id=setup_id,
+            symbol=signal.symbol,
+            direction=direction,
+            strategy_id=strategy_id,
+            timestamp=signal.timestamp,
+            reason=signal.reason,
+            entry_hint=signal.price,
+            stop_hint=stop_hint,
+            target_hint=None,
+            entry_model_hint=EntryModel.NEXT_CANDLE_OPEN,
+            metadata={
+                "signal_type": signal.signal.value,
+                "zone_id": str(signal.zone_id),
+            },
+        )

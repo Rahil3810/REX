@@ -1,9 +1,15 @@
 """Reusable zone engine (manual + automatic providers; provider-swappable)."""
 
 from core.zones.auto import (
+    METHOD_MA_CONFLUENCE_ZONE_V1,
     METHOD_SWING_CLUSTER_ZONE_V1,
     AutomaticZone,
     AutomaticZoneGenerator,
+    GeneratedZone,
+    MAConfluenceEvidence,
+    MAConfluenceStatus,
+    MAConfluenceZoneConfig,
+    MAConfluenceZoneGenerator,
     SwingClusterZoneConfig,
     SwingClusterZoneGeneratorV1,
     ZoneEvidence,
@@ -36,13 +42,19 @@ from core.zones.types import (
 from models.zone import ZoneKind, ZoneSource
 
 __all__ = [
+    "METHOD_MA_CONFLUENCE_ZONE_V1",
     "METHOD_SWING_CLUSTER_ZONE_V1",
     "METHOD_ZONE_EVAL_V1",
     "AutomaticZone",
     "AutomaticZoneGenerator",
     "AutomaticZoneProvider",
     "CompositeZoneProvider",
+    "GeneratedZone",
     "InteractionOutcome",
+    "MAConfluenceEvidence",
+    "MAConfluenceStatus",
+    "MAConfluenceZoneConfig",
+    "MAConfluenceZoneGenerator",
     "ManualZoneProvider",
     "SUPPORTED_HTF_KINDS",
     "SUPPORTED_HTF_TIMEFRAMES",
